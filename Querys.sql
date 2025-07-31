@@ -521,19 +521,89 @@ values
 best seller by total sales price, If 
 there is a tie, report them all.
 Return the result table in any order.*/
-select * from Q17_Product;
-select * from Q17_Sales;s
+select distinct t1.seller_id
+from 
+(select seller_id, sum(price) as price
+from Q17_Sales 
+group by seller_id) t1
+where t1.price = 
+(select max(t.price)
+from
+(select seller_id, sum(price) as price
+from Q17_Sales 
+group by seller_id) t);
 
+SELECT seller_id
+FROM
+(select  seller_id, 
+		sum(price) as price, 
+		rank() over (order by sum(price) desc) as rk
+from Q17_Sales
+group by seller_id) t
+WHERE t.rk = 1;
 
+-- Q66:
+/*Write an SQL query that 
+reports the buyers who have 
+bought S8 but not iPhone. 
+Note that S8 and iPhone are 
+products present in the Product table.
+Return the result table in any order.*/
+select t1.buyer_id 
+from Q17_Sales t1
+join Q17_Product t2
+on t1.product_id = t2.product_id
+where t2.product_name <> 'iPhone'
+and t2.product_name = 'S8';
 
+-- Q67:
+/*You are the restaurant owner and 
+you want to analyse a possible 
+expansion (there will be at least one
+customer every day).
+Write an SQL query to compute the 
+moving average of how much the 
+customer paid in a seven days
+window (i.e., current day + 6 days 
+before). average_amount should be 
+rounded to two decimal places.
+Return result table ordered by 
+visited_on in ascending order.*/
+SELECT
+  visited_on,
+  ROUND((
+    SELECT SUM(amount)
+    FROM Q67_Customer B
+    WHERE B.visited_on BETWEEN DATE_SUB(A.visited_on, INTERVAL 6 DAY) AND A.visited_on
+  ), 2) AS total_amount
+FROM (
+  SELECT DISTINCT visited_on
+  FROM Q67_Customer
+) A
+ORDER BY visited_on;
 
+create table if not exists Q67_Customer
+(
+	customer_id int,
+    name varchar(10),
+    visited_on date,
+    amount int,
+    primary key(customer_id, visited_on)
+);
 
-
-
-
-
-
-
+insert into Q67_Customer (customer_id, name, visited_on, amount)
+values
+(1, 'Jhon', '2019-01-01', 100),
+(2, 'Daniel', '2019-01-02', 110),
+(3, 'Jade', '2019-01-03', 120),
+(4, 'Khaled', '2019-01-04', 130),
+(5, 'Winston', '2019-01-05', 110),
+(6, 'Elvis', '2019-01-06', 140),
+(7, 'Anna', '2019-01-07', 150),
+(8, 'Maria', '2019-01-08', 80),
+(9, 'Jaze', '2019-01-09', 110),
+(1, 'Jhon', '2019-01-10', 130),
+(3, 'Jade', '2019-01-10', 150);
 
 
 
