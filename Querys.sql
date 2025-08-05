@@ -572,7 +572,7 @@ visited_on in ascending order.*/
 SELECT
   visited_on,
   ROUND((
-    SELECT SUM(amount)
+    SELECT SUM(amount) / 7
     FROM Q67_Customer B
     WHERE B.visited_on BETWEEN DATE_SUB(A.visited_on, INTERVAL 6 DAY) AND A.visited_on
   ), 2) AS total_amount
@@ -604,6 +604,382 @@ values
 (9, 'Jaze', '2019-01-09', 110),
 (1, 'Jhon', '2019-01-10', 130),
 (3, 'Jade', '2019-01-10', 150);
+
+-- Q68:
+/*Write an SQL query to find the 
+total score for each gender on each day.
+Return the result table ordered 
+by gender and day in ascending order.*/
+SELECT 
+  gender,
+  day,
+  SUM(score_points) OVER (
+    PARTITION BY gender 
+    ORDER BY day
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+  ) AS cumulative_score
+FROM Q68_Scores
+ORDER BY gender, day;
+
+create table if not exists Q68_Scores
+(
+	player_name varchar(15),
+    gender varchar(1),
+    day date,
+    score_points int,
+    primary key(gender, day)
+);
+
+insert into Q68_Scores (player_name, gender, day, score_points)
+values 
+('Aron', 'F', '2020-01-01', 17),
+('Alice', 'F', '2020-01-07', 23),
+('Bajrang', 'M', '2020-01-07', 7),
+('Khali', 'M', '2019-12-25', 11),
+('Slaman', 'M', '2019-12-30', 13),
+('Joe', 'M', '2019-12-31', 3),
+('Jose', 'M', '2019-12-18', 2),
+('Priya', 'F', '2019-12-31', 23),
+('Priyanka', 'F', '2019-12-30', 17);
+
+-- Q69:
+/*Write an SQL query to find the 
+start and end number of continuous 
+ranges in the table Logs.
+Return the result table ordered by 
+start_id.*/
+select min(log_id) as start_id,
+max(log_id) as end_id
+from
+(select log_id, log_id - row_number() over (order by log_id) as t 
+from (select * from Q69_Logs order by log_id) n) ty
+group by ty.t;
+
+create table if not exists Q69_Logs
+(
+	log_id int primary key
+);
+
+insert into Q69_Logs (log_id)
+values
+(1),
+(2),
+(3),
+(7),
+(8),
+(10);
+
+-- Q70:
+/*Write an SQL query to find the 
+number of times each student 
+attended each exam.
+Return the result table ordered by 
+student_id and subject_name.*/
+select t1.student_id, t1.student_name, t2.subject_name, count(t3.subject_name) as attended_exams
+from Q70_Students t1
+cross join Q70_Subjects t2 
+left join Q70_Examinations t3
+on t1.student_id = t3.student_id
+and t2.subject_name = t3.subject_name
+group by t1.student_id, t1.student_name, t2.subject_name
+order by t1.student_id asc, t2.subject_name asc; 
+
+create table if not exists Q70_Students
+(
+	student_id int primary key,
+    student_name varchar(10)
+);
+
+create table if not exists Q70_Subjects
+(
+	subject_name varchar(25) primary key
+);
+
+create table if not exists Q70_Examinations
+(
+	student_id int,
+    subject_name varchar(25)
+);
+
+insert into Q70_Students (student_id, student_name) 
+values
+(1, 'Alice'),
+(2, 'Bob'),
+(13, 'John'),
+(6, 'Alex');
+
+insert into Q70_Subjects (subject_name) 
+values
+('Math'),
+('Physics'),
+('Programming');
+
+insert into Q70_Examinations (student_id, subject_name) 
+values
+(1, 'Math'),
+(1, 'Physics'),
+(1, 'Programming'),
+(2, 'Programming'),
+(1, 'Physics'),
+(1, 'Math'),
+(13, 'Math'),
+(13, 'Programming'),
+(13, 'Physics'),
+(2, 'Math'),
+(1, 'Math');
+
+-- Q71:
+/*Write an SQL query to find employee_id 
+of all employees that directly or 
+indirectly report their work to the head 
+of the company.
+The indirect relation between managers 
+will not exceed three managers as the 
+company is small.
+Return the result table in any order.*/
+select employee_id
+from Q71_Employees
+where manager_id in (select employee_id
+from Q71_Employees
+where manager_id in 
+(select employee_id from Q71_Employees where manager_id = 1 and employee_id <> 1))
+UNION ALL
+select employee_id
+from Q71_Employees
+where manager_id in 
+(select employee_id from Q71_Employees where manager_id = 1 and employee_id <> 1)
+UNION ALL
+select employee_id from Q71_Employees where manager_id = 1 and employee_id <> 1;
+
+create table if not exists Q71_Employees
+(
+	employee_id int primary key,
+    employee_name varchar(20),
+    manager_id int
+);
+
+insert into Q71_Employees (employee_id, employee_name, manager_id) 
+values
+(1, 'Boss', 1),
+(3, 'Alice', 3),
+(2, 'Bob', 1),
+(4, 'Daniel', 2),
+(7, 'Luis', 4),
+(8, 'Jhon', 3),
+(9, 'Angela', 8),
+(77, 'Robert', 1);
+
+-- Q72:
+/*Write an SQL query to find for each 
+month and country, the number of 
+transactions and their total
+amount, the number of approved 
+transactions and their total amount.
+Return the result table in any order.*/
+select date_format(trans_date, '%Y-%m') as month, 
+country, 
+count(*) as trans_count,
+sum(case when state = 'approved' then 1 else 0 end) as approved_count,
+sum(amount) as trans_total_amount,
+sum(case when state = 'approved' then amount else 0 end) as roved_total_amo
+from Q72_Transactions
+group by country, date_format(trans_date, '%Y-%m');
+
+create table if not exists Q72_Transactions
+(
+	id int primary key,
+    country varchar(2),
+    state enum('approved', 'declined'),
+    amount int,
+    trans_date date
+);
+
+insert into Q72_Transactions (id, country, state, amount, trans_date) 
+values
+(121, 'US', 'approved', 1000, '2018-12-18'),
+(122, 'US', 'declined', 2000, '2018-12-19'),
+(123, 'US', 'approved', 2000, '2019-01-01'),
+(124, 'DE', 'approved', 2000, '2019-01-07');
+
+-- Q73:
+/*Write an SQL query to find the 
+average daily percentage of posts 
+that got removed after being
+reported as spam, rounded to 2 decimal 
+places.*/
+select round(avg(average_daily_percent)*100, 0) as average_daily_percent
+from 
+(SELECT T1.dia, ROUND(T1.distinct_posts_ids/ T2.distinct_posts_ids, 2) AS average_daily_percent
+FROM 
+(select day(t1.action_date) as dia, count(distinct t1.post_id) as distinct_posts_ids
+from Q73_Actions t1
+join Q73_Removals t2
+on t1.post_id = t2.post_id 
+and day(t1.action_date) in (select day(action_date) as dia
+from Q73_Actions
+where action = 'report' and extra = 'spam')
+group by day(t1.action_date)) T1
+JOIN
+(select day(action_date) as dia, count(distinct post_id) as distinct_posts_ids
+from Q73_Actions
+group by day(action_date)) T2
+ON T1.dia = T2.dia
+GROUP BY T1.dia) tuti;
+
+create table if not exists Q73_Actions
+(
+	user_id int,
+    post_id int,
+    action_date date,
+    action enum('view', 'like', 'reaction', 'comment', 'report', 'share'),
+    extra varchar(10)
+);
+
+create table if not exists Q73_Removals
+(
+	post_id int primary key,
+    remove_date date
+);
+
+insert into Q73_Actions (user_id, post_id, action_date, action, extra) 
+values
+(1, 1, '2019-07-01', 'view', NULL),
+(1, 1, '2019-07-01', 'like', NULL),
+(1, 1, '2019-07-01', 'share', NULL),
+(2, 2, '2019-07-04', 'view', NULL),
+(2, 2, '2019-07-04', 'report', 'spam'),
+(3, 4, '2019-07-04', 'view', NULL),
+(3, 4, '2019-07-04', 'report', 'spam'),
+(4, 3, '2019-07-02', 'view', NULL),
+(4, 3, '2019-07-02', 'report', 'spam'),
+(5, 2, '2019-07-03', 'view', NULL),
+(5, 2, '2019-07-03', 'report', 'racism'),
+(5, 5, '2019-07-03', 'view', NULL),
+(5, 5, '2019-07-03', 'report', 'racism');
+
+insert into Q73_Removals (post_id, remove_date) 
+values
+(2, '2019-07-20'),
+(3, '2019-07-18');
+
+-- Q74:
+/*Write an SQL query to report the 
+fraction of players that logged in 
+again on the day after the day they
+first logged in, rounded to 2 decimal 
+places. In other words, you need to 
+count the number of players
+that logged in for at least two 
+consecutive days starting from their 
+first login date, then divide that
+number by the total number of players.*/
+with y1 as (SELECT count(distinct T.player_id) as i
+FROM 
+(select *, lag(event_date) over (partition by player_id order by event_date) as g,
+datediff(event_date, lag(event_date) over (partition by player_id order by event_date)) as t
+from Q24_Activity) T
+WHERE T.t = 1),
+y2 as (select count(distinct player_id) as h from Q24_Activity)
+	SELECT round(y1.i/y2.h, 2) as fraction
+    FROM y1, y2;
+
+-- Q75:
+/*Write an SQL query to report the 
+fraction of players that logged in 
+again on the day after the day they
+first logged in, rounded to 2 decimal 
+places. In other words, you need to 
+count the number of players
+that logged in for at least two 
+consecutive days starting from their 
+first login date, then divide that
+number by the total number of players.*/
+with y1 as 
+(select count(distinct t.player_id) as i
+from 
+(select t1.player_id, datediff(t1.event_date, t2.first_log) as g
+from Q24_Activity t1 
+join 
+(select player_id, min(event_date) as first_log, count(distinct event_date) as total_days
+from Q24_Activity
+group by player_id
+having total_days >= 2) t2
+on t1.player_id = t2.player_id) t
+where t.g = 1), 
+y2 as (select count(distinct player_id) as h 
+from Q24_Activity)
+	select round(y1.i / (y2.h), 2) as fraction
+	from y1, y2;
+
+-- Q76:
+/*Write an SQL query to find the salaries 
+of the employees after applying taxes. 
+Round the salary to the
+nearest integer.
+The tax rate is calculated for each company 
+based on the following criteria:
+● 0% If the max salary of any employee in 
+the company is less than $1000.
+● 24% If the max salary of any employee in 
+the company is in the range [1000, 10000] 
+inclusive.
+● 49% If the max salary of any employee in 
+the company is greater than $10000.
+Return the result table in any order.*/
+select 	t1.company_id,
+		t1.employee_id,
+        t1.employee_name,
+		round
+        (case 
+			when t2.max_salary < 1000 then t1.salary*1 
+			when (t2.max_salary >= 1000 and t2.max_salary <= 10000) then t1.salary*0.76 
+			when t2.max_salary > 10000 then t1.salary*0.51 
+		end) as salary
+from Q76_Salaries t1
+join
+(select company_id, max(salary) as max_salary 
+from Q76_Salaries 
+group by company_id) t2
+on t1.company_id = t2.company_id
+order by t1.company_id;
+
+create table if not exists Q76_Salaries
+(
+	company_id int,
+    employee_id int,
+    employee_name varchar(20),
+    salary int,
+    primary key(company_id, employee_id)
+);
+
+insert into Q76_Salaries (company_id, employee_id, employee_name, salary)
+values
+(1, 1, 'Tony', 2000),
+(1, 2, 'Pronub', 21300),
+(1, 3, 'Tyrrox', 10800),
+(2, 1, 'Pam', 300),
+(2, 7, 'Bassem', 450),
+(2, 9, 'Hermione', 700),
+(3, 7, 'Bocaben', 100),
+(3, 2, 'Ognjen', 2200),
+(3, 13, 'Nyan Cat', 3300),
+(3, 15, 'Morning Cat', 7777);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
