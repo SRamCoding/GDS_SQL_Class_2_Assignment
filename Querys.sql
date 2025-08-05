@@ -965,32 +965,185 @@ values
 (3, 13, 'Nyan Cat', 3300),
 (3, 15, 'Morning Cat', 7777);
 
+-- Q77:
+/*Write an SQL query to evaluate the 
+boolean expressions in Expressions table.
+Return the result table in any order.*/
+SELECT 
+	T.left_operand, T.operator, T.right_operand,
+    case when
+		(case when operator = '<' then (T.left_operand2 < T.right_operand2)
+			 when operator = '>' then (T.left_operand2 > T.right_operand2)
+			 when operator = '=' then (T.left_operand2 = T.right_operand2)
+		end) then 'true'
+        else 'false'
+	end as value
+FROM 
+(select t3.left_operand2, t3.left_operand, t3.operator, t4.value as right_operand2, t3.right_operand
+from
+(select t2.value as left_operand2, t1.left_operand, t1.operator, t1.right_operand
+from Q77_Expressions t1
+join Q77_Variables t2
+on t1.left_operand = t2.name) t3
+join Q77_Variables t4
+on t3.right_operand = t4.name) T;
 
+create table if not exists Q77_Variables
+(
+    name varchar(1) primary key,
+    value int
+);
 
+create table if not exists Q77_Expressions
+(
+    left_operand varchar(1),
+    operator enum('<', '>', '='),
+    right_operand varchar(1),
+    primary key(left_operand, operator, right_operand)
+);
 
+insert into Q77_Variables (name, value)
+values
+('x', 66),
+('y', 77);
 
+insert into Q77_Expressions (left_operand, operator, right_operand)
+values
+('x', '>', 'y'),
+('x', '<', 'y'),
+('x', '=', 'y'),
+('y', '>', 'x'),
+('y', '<', 'x'),
+('x', '=', 'x');
 
+-- Q78:
+/*A telecommunications company wants 
+to invest in new countries. The company 
+intends to invest in the countries where 
+the average call duration of the calls 
+in this country is strictly greater than 
+the global average call duration.
+Write an SQL query to find the countries 
+where this company can invest.
+Return the result table in any order.*/
+with y1 as 
+	(select t1.user_id, t1.duration, CAST(SUBSTRING_INDEX(t2.phone_number, '-', 1) AS UNSIGNED) as code
+	from 
+	(select caller_id as user_id, duration 
+	from Q55_Calls
+	UNION ALL
+	select callee_id as user_id, duration 
+	from Q55_Calls) t1
+	left join Q55_Person t2
+	on t1.user_id = t2.id),
+y2 as 
+	(select * from Q55_Country),
+y1_y2 as 
+	(select sum(y1.duration) as total, y2.name
+	from y1
+	join y2
+	on y1.code = y2.country_code
+	group by y2.name)
+select y1_y2.name as country
+from y1_y2
+where total > (select avg(total) as promedio from y1_y2);
 
+-- Q79:
+/*Write a query that prints a list 
+of employee names (i.e.: the name 
+attribute) from the Employee table 
+in alphabetical order.*/
+select distinct name 
+from Q79_Employee
+order by name;
 
+create table if not exists Q79_Employee
+(
+    employee_id int primary key,
+    name varchar(15),
+    months int,
+    salary int
+);
 
+insert into Q79_Employee (employee_id, name, months, salary)
+values
+(12228, 'Rose', 15, 1968),
+(33645, 'Angela', 1, 3443),
+(45692, 'Frank', 17, 1608),
+(56118, 'Patrick', 7, 1345),
+(59725, 'Lisa', 11, 2330),
+(74197, 'Kimberly', 16, 4372),
+(78454, 'Bonnie', 8, 1771),
+(83565, 'Michael', 6, 2017),
+(98607, 'Todd', 5, 3396),
+(99989, 'Joe', 9, 3573);
 
+-- Q80:
+/*Assume you are given the table below 
+containing information on user transactions 
+for particular products. Write a query to 
+obtain the year-on-year growth rate for the 
+total spend of each product for each year.
+Output the year (in ascending order) partitioned 
+by product id, current year's spend, previous 
+year's spend and year-on-year growth rate 
+(percentage rounded to 2 decimal places).*/
+select 	product_id, 
+		spend as curr_year_spend, 
+        lag(spend) over (order by year(transaction_date)) as prev_year_spend,
+        round((spend*100/lag(spend) over (order by year(transaction_date))) - 100, 2) as yoy_rate
+from Q80_user_transactions;
 
+create table if not exists Q80_user_transactions
+(
+    transaction_id int,
+    product_id int,
+    spend float,
+    transaction_date datetime
+);
 
+insert into Q80_user_transactions (transaction_id, product_id, spend, transaction_date)
+values
+(1341, 123424, 1500.60, '2019-12-31 12:00:00'),
+(1423, 123424, 1000.20, '2020-12-31 12:00:00'),
+(1623, 123424, 1246.44, '2021-12-31 12:00:00'),
+(1322, 123424, 2145.32, '2022-12-31 12:00:00');
 
+-- Q81:
+/*Amazon wants to maximise the number 
+of items it can stock in a 500,000 
+square feet warehouse. It wants to 
+stock as many prime items as possible, 
+and afterwards use the remaining square 
+footage to stock the most number of 
+non-prime items.
+Write a SQL query to find the number of 
+prime and non-prime items that can be 
+stored in the 500,000 square feet 
+warehouse. Output the item type and 
+number of items to be stocked.
+Hint - create a table containing a summary 
+of the necessary fields such as item type 
+('prime_eligible','not_prime'), SUM of 
+square footage, and COUNT of items grouped 
+by the item type.*/
+select * from Q81_inventory;
 
+create table if not exists Q81_inventory
+(
+    item_id int,
+    item_type enum('prime_eligible','not_prime'),
+    item_category varchar(25),
+    square_footage float
+);
 
-
-
-
-
-
-
-
-
-
-
-
-
+insert into Q81_inventory (item_id, item_type, item_category, square_footage)
+values
+(1374, 'prime_eligible', 'mini refrigerator', 68.00),
+(4245, 'not_prime', 'standing lamp', 26.40),
+(2452, 'prime_eligible', 'television', 85.00),
+(3255, 'not_prime', 'side table', 22.60),
+(1672, 'prime_eligible', 'laptop', 8.50);
 
 
 
