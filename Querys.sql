@@ -1109,7 +1109,7 @@ values
 (1623, 123424, 1246.44, '2021-12-31 12:00:00'),
 (1322, 123424, 2145.32, '2022-12-31 12:00:00');
 
--- Q81:
+-- Q81: **********************FALTA**********************************
 /*Amazon wants to maximise the number 
 of items it can stock in a 500,000 
 square feet warehouse. It wants to 
@@ -1146,12 +1146,104 @@ values
 (1672, 'prime_eligible', 'laptop', 8.50);
 
 
+select (500000 / min(square_footage)) as min 
+from Q81_inventory
+where item_type = 'prime_eligible';
+
+-- Q82:
+/*Assume you have the table below 
+containing information on Facebook 
+user actions. Write a query to
+obtain the active user retention 
+in July 2022. Output the month 
+(in numerical format 1, 2, 3) and 
+the number of monthly active users 
+(MAUs).
+Hint: An active user is a user 
+who has user action 
+("sign-in", "like", or "comment") 
+in the current month and last month.*/
+select MONTH(t.y2) as month, count(distinct user_id) as monthly_active_users
+from
+(select *
+, lag(event_type) over(partition by user_id order by event_date) as y1
+, lag(event_date) over(partition by user_id order by event_date) as y2
+from Q82_user_actions) t
+where MONTH(t.event_date) = MONTH(t.y2)
+	  AND YEAR(t.event_date) = YEAR(t.y2)
+group by MONTH(t.y2);
+
+create table if not exists Q82_user_actions
+(
+    user_id int,
+    event_id int,
+    event_type enum('sign-in', 'like', 'comment'),
+    event_date datetime
+);
+
+insert into Q82_user_actions (user_id, event_id, event_type, event_date)
+values
+(445, 7765, 'sign-in', '2022-05-31 12:00:00'),
+(742, 6458, 'sign-in', '2022-06-03 12:00:00'),
+(445, 3634, 'like', '2022-06-05 12:00:00'),
+(742, 1374, 'comment', '2022-06-05 12:00:00'),
+(648, 3124, 'like', '2022-06-18 12:00:00');
+
+-- Q83:
+/*Google's marketing team is making 
+a Superbowl commercial and needs a 
+simple statistic to put on
+their TV ad: the median number of 
+searches a person made last year.
+However, at Google scale, querying 
+the 2 trillion searches is too costly. 
+Luckily, you have access to the
+summary table which tells you the 
+number of searches made last year and 
+how many Google users fall into that 
+bucket.
+Write a query to report the median of 
+searches made by a user. Round the 
+median to one decimal point.*/
+select * from Q83_search_frequency;
+
+  SELECT searches, 1 AS cnt
+  FROM Q83_search_frequency
+  WHERE num_users > 0;
+
+WITH RECURSIVE expanded AS (
+  -- Caso base: empezar con cada búsqueda una vez
+  SELECT searches, 1 AS cnt
+  FROM Q83_search_frequency
+  WHERE num_users > 0
+
+  UNION ALL
+
+  -- Paso recursivo: ir sumando hasta alcanzar el número de usuarios
+  SELECT e.searches, e.cnt + 1
+  FROM expanded e
+  JOIN Q83_search_frequency sf
+    ON e.searches = sf.searches
+  WHERE e.cnt + 1 <= sf.num_users
+)
+
+-- Consulta final para ver la expansión
+SELECT * FROM expanded
+ORDER BY searches, cnt;
 
 
+create table if not exists Q83_search_frequency
+(
+    searches int,
+    num_users int
+);
 
-
-
-
+insert into Q83_search_frequency (searches, num_users)
+values
+(1, 2),
+(2, 2),
+(3, 3),
+(4, 1);
 
 
 
