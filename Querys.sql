@@ -1189,7 +1189,7 @@ values
 (742, 1374, 'comment', '2022-06-05 12:00:00'),
 (648, 3124, 'like', '2022-06-18 12:00:00');
 
--- Q83:
+-- Q83:**********************FALTA**************************
 /*Google's marketing team is making 
 a Superbowl commercial and needs a 
 simple statistic to put on
@@ -1207,31 +1207,6 @@ searches made by a user. Round the
 median to one decimal point.*/
 select * from Q83_search_frequency;
 
-  SELECT searches, 1 AS cnt
-  FROM Q83_search_frequency
-  WHERE num_users > 0;
-
-WITH RECURSIVE expanded AS (
-  -- Caso base: empezar con cada búsqueda una vez
-  SELECT searches, 1 AS cnt
-  FROM Q83_search_frequency
-  WHERE num_users > 0
-
-  UNION ALL
-
-  -- Paso recursivo: ir sumando hasta alcanzar el número de usuarios
-  SELECT e.searches, e.cnt + 1
-  FROM expanded e
-  JOIN Q83_search_frequency sf
-    ON e.searches = sf.searches
-  WHERE e.cnt + 1 <= sf.num_users
-)
-
--- Consulta final para ver la expansión
-SELECT * FROM expanded
-ORDER BY searches, cnt;
-
-
 create table if not exists Q83_search_frequency
 (
     searches int,
@@ -1245,19 +1220,345 @@ values
 (3, 3),
 (4, 1);
 
+-- Q84: *******************************FALTA******************************
+/*Write a query to update the Facebook 
+advertiser's status using the daily_pay 
+table. Advertiser is a two-column table 
+containing the user id and their payment 
+status based on the last payment and
+daily_pay table has current information 
+about their payment. Only advertisers 
+who paid will show up in this table.
+Output the user id and current payment 
+status sorted by the user id.
+Definition of advertiser status:
+● New: users registered and made their 
+first payment.
+● Existing: users who paid previously 
+and recently made a current payment.
+● Churn: users who paid previously, 
+but have yet to make any recent payment.
+● Resurrect: users who did not pay 
+recently but may have made a previous 
+payment and have made payment again 
+recently.*/
+select * from Q84_advertiser;
+select * from Q84_daily_pay;
+
+create table if not exists Q84_advertiser
+(
+    user_id varchar(10),
+    status varchar(20)
+);
+
+create table if not exists Q84_daily_pay
+(
+    user_id varchar(10),
+    paid float
+);
+
+insert into Q84_advertiser (user_id, status)
+values
+('bing', 'NEW'),
+('yahoo', 'NEW'),
+('alibaba', 'EXISTING');
+  
+insert into Q84_daily_pay (user_id, paid)
+values
+('yahoo', 45.00),
+('alibaba', 100.00),
+('target', 13.00);
+
+-- Q85: 
+/*Amazon Web Services (AWS) is powered 
+by fleets of servers. Senior management 
+has requested data-driven solutions to 
+optimise server usage.
+Write a query that calculates the total 
+time that the fleet of servers was 
+running. The output should be in units 
+of full days.
+
+1. Calculate individual uptimes
+2. Sum those up to obtain the uptime of 
+the whole fleet, keeping in mind that 
+the result must be output in units of 
+full days
+Assumptions:
+● Each server might start and stop 
+several times.
+● The total time in which the server 
+fleet is running can be calculated as 
+the sum of each server's uptime.*/
+WITH T AS 
+(select * 
+from
+(select 	*
+		, lag(session_status) over(partition by server_id) as y
+		, lag(status_time) over(partition by server_id) as y0
+        ,(TIMESTAMPDIFF(SECOND,
+                LAG(status_time) OVER (PARTITION BY server_id ORDER BY status_time),
+                status_time)/86400.0) AS diff_days
+from Q85_server_utilization) t
+where t.session_status = 'stop' and t.y = 'start'
+order by t.server_id asc, t.status_time asc)
+SELECT round(sum(T.diff_days)) as total_uptime_days
+FROM T;
+
+create table if not exists Q85_server_utilization
+(
+    server_id int,
+    status_time timestamp,
+    session_status enum('start', 'stop')
+);
+
+insert into Q85_server_utilization (server_id, status_time, session_status)
+values
+(1, '2022-08-02 10:00:00', 'start'),
+(1, '2022-08-04 10:00:00', 'stop'),
+(2, '2022-08-17 10:00:00', 'start'),
+(2, '2022-08-24 10:00:00', 'stop');
+
+-- Q86: 
+/*Sometimes, payment transactions are 
+repeated by accident; it could be due 
+to user error, API failure or a retry 
+error that causes a credit card to be 
+charged twice.
+Using the transactions table, identify 
+any payments made at the same merchant 
+with the same credit card for the same 
+amount within 10 minutes of each other. 
+Count such repeated payments.
+
+Assumptions:
+● The first transaction of such payments 
+should not be counted as a repeated 
+payment. This means, if there are two 
+transactions performed by a merchant 
+with the same credit card and for the 
+same amount within 10 minutes, there 
+will only be 1 repeated payment.*/
+select count(distinct merchant_id) as payment_count
+from
+(select *, 
+lag(transaction_timestamp) 
+	over(partition by merchant_id, credit_card_id, amount 
+		 order by transaction_timestamp asc) as g,
+(TIMESTAMPDIFF(SECOND,
+                LAG(transaction_timestamp) 
+					OVER (PARTITION BY merchant_id, credit_card_id, amount 
+						  ORDER BY transaction_timestamp asc),
+                transaction_timestamp)/60.0) AS diff
+from Q86_transactions) t
+where t.diff <= 10;
+
+create table if not exists Q86_transactions
+(
+    transaction_id int,
+    merchant_id int,
+    credit_card_id int,
+    amount int,
+    transaction_timestamp datetime
+);
+
+insert into Q86_transactions (transaction_id, merchant_id, credit_card_id, amount, transaction_timestamp)
+values
+(1, 101, 1, 100, '2022-09-25 12:00:00'),
+(2, 101, 1, 100, '2022-09-25 12:08:00'),
+(3, 101, 1, 100, '2022-09-25 12:28:00'),
+(4, 102, 2, 300, '2022-09-25 12:00:00'),
+(6, 102, 2, 400, '2022-09-25 14:00:00');
+
+-- Q87: 
+/*DoorDash's Growth Team is trying to 
+make sure new users (those who are 
+making orders in their first 14 days) 
+have a great experience on all their 
+orders in their 2 weeks on the platform.
+Unfortunately, many deliveries are 
+being messed up because:
+● the orders are being completed incorrectly 
+(missing items, wrong order, etc.)
+● the orders aren't being received (wrong 
+address, wrong drop off spot)
+● the orders are being delivered late (the 
+actual delivery time is 30 minutes later 
+than when the order was placed). Note that 
+the estimated_delivery_timestamp is 
+automatically set to 30 minutes after the 
+order_timestamp.
+
+Write a query to find the bad experience 
+rate in the first 14 days for new users 
+who signed up in June 2022. Output the 
+percentage of bad experience rounded to 
+2 decimal places.*/
+with y1 as 
+(select count(*) as g
+from
+(select 
+  o.customer_id,
+  o.status,
+  o.order_timestamp,
+  c.signup_timestamp,
+  (TIMESTAMPDIFF(SECOND, o.order_timestamp, c.signup_timestamp)/86400.0) AS diff
+from Q87_orders o
+join Q87_customers c on o.customer_id = c.customer_id
+where year(c.signup_timestamp) = 2022 and month(c.signup_timestamp) = 6) T
+where abs(T.diff) <=14 and (T.status = 'completed_incorrectly' or T.status = 'never_received')), 
+y2 as 
+(select count(*) as g
+from
+(select 
+  o.customer_id,
+  o.status,
+  o.order_timestamp,
+  c.signup_timestamp,
+  (TIMESTAMPDIFF(SECOND, o.order_timestamp, c.signup_timestamp)/86400.0) AS diff
+from Q87_orders o
+join Q87_customers c on o.customer_id = c.customer_id
+where year(c.signup_timestamp) = 2022 and month(c.signup_timestamp) = 6) T)
+
+SELECT (y1.g*100/y2.g) AS bad_experience_pct
+FROM y1,y2;
+
+create table if not exists Q87_orders
+(
+    order_id int,
+    customer_id int,
+    trip_id int,
+    status enum('completed_successfully', 'completed_incorrectly', 'never_received'),
+    order_timestamp timestamp
+);
+
+create table if not exists Q87_trips
+(
+    dasher_id int,
+    trip_id int,
+    estimated_delivery_timestamp timestamp,
+    actual_delivery_timestamp timestamp
+);
+
+create table if not exists Q87_customers
+(
+    customer_id int,
+	signup_timestamp timestamp
+);
+
+insert into Q87_orders (order_id, customer_id, trip_id, status, order_timestamp)
+values
+(727424, 8472, 100463, 'completed successfully', '2022-06-05 09:12:00'),
+(242513, 2341, 100482, 'completed incorrectly', '2022-06-05 14:40:00'),
+(141367, 1314, 100362, 'completed incorrectly', '2022-06-07 15:03:00'),
+(582193, 5421, 100657, 'never_received', '2022-07-07 15:22:00'),
+(253613, 1314, 100213, 'completed successfully', '2022-06-12 13:43:00');
+
+insert into Q87_trips (dasher_id, trip_id, estimated_delivery_timestamp, actual_delivery_timestamp)
+values
+(101, 100463, '2022-06-05 09:42:00', '2022-06-05 09:38:00'),
+(102, 100482, '2022-06-05 15:10:00', '2022-06-05 15:46:00'),
+(101, 100362, '2022-06-07 15:33:00', '2022-06-07 16:45:00'),
+(102, 100657, '2022-07-07 15:52:00', NULL),
+(103, 100213, '2022-06-12 14:13:00', '2022-06-12 14:10:00');
+
+insert into Q87_customers (customer_id, signup_timestamp)
+values
+(8472, '2022-05-30 00:00:00'),
+(2341, '2022-06-01 00:00:00'),
+(1314, '2022-06-03 00:00:00'),
+(1435, '2022-06-05 00:00:00'),
+(5421, '2022-06-07 00:00:00');
+
+-- Q88: 
+/*Write an SQL query to find the 
+total score for each gender on each 
+day.
+Return the result table ordered by 
+gender and day in ascending order.*/
+select gender, 
+	   day, 
+	   sum(score_points) over(partition by gender order by day asc) as total 
+from Q68_Scores;
+
+-- Q89: 
+/*A telecommunications company wants 
+to invest in new countries. The company 
+intends to invest in the countries where 
+the average call duration of the calls 
+in this country is strictly greater than 
+the global average call duration.
+Write an SQL query to find the countries 
+where this company can invest.
+Return the result table in any order.*/
+with t1 as 
+(select t.usuario, sum(t.duration) as total_call_duration
+from
+(select caller_id as usuario, duration from Q55_Calls
+union all
+select callee_id as usuario, duration from Q55_Calls) t
+group by t.usuario),
+t2 as 
+(select  t1.usuario, 
+		t1.total_call_duration, 
+        CAST(SUBSTRING_INDEX(y2.phone_number, '-', 1) AS UNSIGNED) as code_country
+from t1 
+join Q55_Person y2 
+on t1.usuario = y2.id),
+t3 as 
+(select u2.name, sum(t2.total_call_duration) as duration_call_per_country
+from t2
+join Q55_Country u2
+on t2.code_country = u2.country_code
+group by u2.name), 
+t4 as 
+(select avg(t3.duration_call_per_country) as average_duration
+from t3)
+
+SELECT t3.name as country
+FROM t3, t4
+WHERE t3.duration_call_per_country > t4.average_duration;
+
+-- Q90: 
+/*The median is the value separating 
+the higher half from the lower half 
+of a data sample.
+Write an SQL query to report the 
+median of all the numbers in the 
+database after decompressing the
+Numbers table. Round the median to 
+one decimal point.*/
+select * from Q90_Numbers;
+
+with Q90_Numbers_descompressed as
+(
+	select num, 1 as contador
+    from Q90_Numbers
+    where frequency > 0
+    
+    union all
+    
+    select t1.num, t1.contador+1
+    from Q90_Numbers_descompressed t1
+    join Q90_Numbers t2
+    on t1.num = t2.num
+    where t1.contador+1 <= t2.frequency
+) 
+select * from Q90_Numbers_descompressed, Q90_Numbers;
 
 
+create table if not exists Q90_Numbers
+(
+    num int primary key,
+	frequency int
+);
 
-
-
-
-
-
-
-
-
-
-
+insert into Q90_Numbers (num, frequency)
+values
+(0, 7),
+(1, 1),
+(2, 3),
+(3, 1);
 
 
 
