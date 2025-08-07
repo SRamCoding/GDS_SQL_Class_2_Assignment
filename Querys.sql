@@ -1528,9 +1528,7 @@ median of all the numbers in the
 database after decompressing the
 Numbers table. Round the median to 
 one decimal point.*/
-select * from Q90_Numbers;
-
-with Q90_Numbers_descompressed as
+with recursive Q90_Numbers_descompressed as
 (
 	select num, 1 as contador
     from Q90_Numbers
@@ -1543,9 +1541,21 @@ with Q90_Numbers_descompressed as
     join Q90_Numbers t2
     on t1.num = t2.num
     where t1.contador+1 <= t2.frequency
-) 
-select * from Q90_Numbers_descompressed, Q90_Numbers;
+),
+Q90_Numbers_descompressed_ordened as 
+(select *, row_number() over(order by num) as enumeracion
+from Q90_Numbers_descompressed
+order by num asc, contador asc),
+total_nums as 
+(select count(*) as total
+from Q90_Numbers_descompressed_ordened)
 
+SELECT ROUND
+	  (CASE 
+		WHEN mod(total, 2) = 1 THEN (select num from Q90_Numbers_descompressed_ordened where enumeracion = (total+1)/2)
+		WHEN mod(total,2) = 0 THEN (select avg(num) from Q90_Numbers_descompressed_ordened where enumeracion in (total/2, (total/2)+1))
+	   END, 0) as median
+FROM total_nums;
 
 create table if not exists Q90_Numbers
 (
@@ -1559,6 +1569,137 @@ values
 (1, 1),
 (2, 3),
 (3, 1);
+
+-- Q91: 
+/*Write an SQL query to report the 
+comparison result (higher/lower/same) 
+of the average salary of employees in 
+a department to the company's average 
+salary.
+Return the result table in any order.*/
+with Q91_Employee_join_Q91_Salary as 
+(select t2.department_id, t1.pay_date, t1.amount
+from Q91_Salary t1 
+join Q91_Employee t2
+on t1.employee_id = t2.employee_id),
+promedio_por_mes as
+(select DATE_FORMAT(pay_date, '%Y-%m') AS pay_month, avg(amount) as prom
+from Q91_Employee_join_Q91_Salary
+group by DATE_FORMAT(pay_date, '%Y-%m')),
+promedio_por_mes_departamento as 
+(select DATE_FORMAT(pay_date, '%Y-%m') AS pay_month, department_id, avg(amount) as h
+from Q91_Employee_join_Q91_Salary
+group by DATE_FORMAT(pay_date, '%Y-%m'), department_id)
+
+SELECT  promedio_por_mes_departamento.pay_month, 
+		promedio_por_mes_departamento.department_id,
+        case when promedio_por_mes_departamento.h < promedio_por_mes.prom then 'lower'
+			 when promedio_por_mes_departamento.h = promedio_por_mes.prom then 'same'
+             else 'higher'
+		end as comparison
+FROM promedio_por_mes_departamento
+JOIN promedio_por_mes
+ON promedio_por_mes_departamento.pay_month = promedio_por_mes.pay_month
+ORDER BY 
+promedio_por_mes_departamento.department_id asc, 
+promedio_por_mes_departamento.pay_month asc;
+
+create table if not exists Q91_Employee
+(
+    employee_id int primary key,
+	department_id int
+);
+
+create table if not exists Q91_Salary
+(
+    id int primary key,
+	employee_id int,
+    amount int,
+    pay_date date,
+    foreign key(employee_id) references Q91_Employee(employee_id)
+);
+
+insert into Q91_Employee (employee_id, department_id) 
+values
+(1, 1),
+(2, 2),
+(3, 2);
+
+insert into Q91_Salary (id, employee_id, amount, pay_date) 
+values
+(1, 1, 9000, '2017-03-31'),
+(2, 2, 6000, '2017-03-31'),
+(3, 3, 10000, '2017-03-31'),
+(4, 1, 7000, '2017-02-28'),
+(5, 2, 6000, '2017-02-28'),
+(6, 3, 8000, '2017-02-28');
+
+-- Q92: 
+/*The install date of a player is the 
+first login day of that player.
+We define day one retention of some 
+date x to be the number of players 
+whose install date is x and they logged 
+back in on the day right after x, 
+divided by the number of players whose 
+install date is x, rounded to 2 decimal 
+places.
+Write an SQL query to report for each 
+install date, the number of players that 
+installed the game on that day, and the 
+day one retention.
+Return the result table in any order.*/
+
+select * from Q24_Activity;
+
+with y1 as 
+(select player_id, event_date as g
+from 
+(select *, row_number() over(partition by player_id order by event_date asc) as y
+from Q24_Activity) t
+where t.y = 1),
+y2 as 
+(select t1.player_id, y1.g, datediff(event_date, g) as h
+from Q24_Activity t1
+join y1
+on t1.player_id = y1.player_id),
+y3 as 
+(select y2.g as g, sum(case when h=1 then 1 else 0 end) as w from y2 group by y2.g),
+y4 as 
+(select y2.g, count(*) as r from y2 group by y2.g)
+select y4.g, y4.r, (y3.w/y4.r) as u 
+from y3
+join y4
+on y3.g = y4.g;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
