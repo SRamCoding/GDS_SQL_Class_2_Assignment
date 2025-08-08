@@ -1649,28 +1649,246 @@ install date, the number of players that
 installed the game on that day, and the 
 day one retention.
 Return the result table in any order.*/
-
-select * from Q24_Activity;
-
-with y1 as 
-(select player_id, event_date as g
-from 
-(select *, row_number() over(partition by player_id order by event_date asc) as y
+with t1 as 
+(select t.player_id, t.event_date as install_date
+from
+(select *, row_number() over (partition by player_id) as t
 from Q24_Activity) t
-where t.y = 1),
-y2 as 
-(select t1.player_id, y1.g, datediff(event_date, g) as h
-from Q24_Activity t1
-join y1
-on t1.player_id = y1.player_id),
-y3 as 
-(select y2.g as g, sum(case when h=1 then 1 else 0 end) as w from y2 group by y2.g),
-y4 as 
-(select y2.g, count(*) as r from y2 group by y2.g)
-select y4.g, y4.r, (y3.w/y4.r) as u 
-from y3
-join y4
-on y3.g = y4.g;
+where t.t = 1),
+
+t2 as
+(select t1.install_date, count(distinct player_id) as total_players_per_install_date
+from t1
+group by t1.install_date),
+
+t3 as 
+(select y1.player_id, t1.install_date
+from Q24_Activity y1
+join t1
+on y1.player_id = t1.player_id
+where datediff(y1.event_date, t1.install_date)=1),
+
+t4 as 
+(select t3.install_date, count(*) as total_players_retained_per_install_date
+from t3
+group by t3.install_date)
+
+select  t2.install_date as install_dt, 
+		t2.total_players_per_install_date as installs, 
+		round(coalesce((t4.total_players_retained_per_install_date / t2.total_players_per_install_date), 0), 1) as Day1_retention
+from t2
+left join t4
+on t2.install_date = t4.install_date;
+
+-- Q93: 
+/*The winner in each group is the 
+player who scored the maximum total 
+points within the group. In the
+case of a tie, the lowest player_id 
+wins.
+Write an SQL query to find the winner 
+in each group.
+Return the result table in any order.*/
+with t1 as 
+(select first_player as player, first_score as score 
+from Q50_Matches
+
+union all
+
+select second_player as player, second_score as score 
+from Q50_Matches),
+
+t2 as 
+(select Q50_Players.group_id, t1.player, t1.score
+from t1 
+join Q50_Players 
+on t1.player = Q50_Players.player_id),
+
+t3 as 
+(select group_id, player, sum(score) as score
+from t2 
+group by group_id, player
+order by group_id desc, score desc, player asc)
+
+select t.group_id, t.player as player_id
+from
+(select *, row_number() over(partition by group_id order by score desc, player asc) as orden
+from t3) t
+where t.orden = 1;
+
+-- Q94: 
+/*A quiet student is the one who took at 
+least one exam and did not score the high 
+or the low score.
+Write an SQL query to report the students 
+(student_id, student_name) being quiet in 
+all exams. Do not
+return the student who has never taken any 
+exam.
+Return the result table ordered by 
+student_id.*/
+with t1 as 
+(select 	*, 
+		min(score) over(partition by exam_id) as min,
+		max(score) over(partition by exam_id) as max 
+from Q94_Exam
+order by exam_id asc, score asc, student_id asc),
+
+t2 as 
+(select distinct student_id 
+from t1 
+where score = min or score = max),
+
+t3 as 
+(select distinct student_id  
+from t1
+where t1.student_id not in (select student_id from t2))
+
+select t3.student_id, Q94_Student.student_name
+from t3 
+join Q94_Student
+on t3.student_id = Q94_Student.student_id;
+
+create table if not exists Q94_Student
+(
+    student_id int primary key,
+	student_name varchar(15)
+);
+
+create table if not exists Q94_Exam
+(
+    exam_id int,
+	student_id int,
+    score int,
+    primary key(exam_id, student_id)
+);
+
+insert into Q94_Student (student_id, student_name)
+values
+(1, 'Daniel'),
+(2, 'Jade'),
+(3, 'Stella'),
+(4, 'Jonathan'),
+(5, 'Will');
+
+insert into Q94_Exam (exam_id, student_id, score)
+values
+(10, 1, 70),
+(10, 2, 80),
+(10, 3, 90),
+(20, 1, 80),
+(30, 1, 70),
+(30, 3, 80),
+(30, 4, 90),
+(40, 1, 60),
+(40, 2, 70),
+(40, 4, 80);
+
+-- Q95: 
+/*A quiet student is the one who took at 
+least one exam and did not score the high 
+or the low score.
+Write an SQL query to report the students 
+(student_id, student_name) being quiet in 
+all exams. Do not
+return the student who has never taken any 
+exam.
+Return the result table ordered by 
+student_id.*/
+with min as 
+(select exam_id, min(score) as min 
+from Q94_Exam
+group by exam_id),
+
+max as 
+(select exam_id, max(score) as max
+from Q94_Exam
+group by exam_id),
+
+students_mins as
+(select distinct student_id
+from Q94_Exam
+join min
+on Q94_Exam.exam_id = min.exam_id and Q94_Exam.score = min.min), 
+
+students_maxs as
+(select distinct student_id
+from Q94_Exam
+join max
+on Q94_Exam.exam_id = max.exam_id and Q94_Exam.score = max.max),
+
+all_students_mins_maxs as
+(select distinct student_id
+from (select student_id from students_mins 
+	  union 
+      select student_id from students_maxs) t), 
+      
+all_students_exams as
+(select distinct student_id 
+from Q94_Exam)
+      
+select * 
+from Q94_Student 
+where 	student_id not in (select student_id from all_students_mins_maxs)
+		and student_id in (select student_id from all_students_exams);
+
+-- Q96: 
+/*You're given two tables on Spotify users' 
+streaming data. songs_history table contains 
+the historical streaming data and songs_weekly 
+table contains the current week's streaming data.
+Write a query to output the user id, song id, 
+and cumulative count of song plays as of 
+4 August 2022 sorted in descending order.
+Definitions:
+● song_weekly table currently holds data from 
+1 August 2022 to 7 August 2022.
+● songs_history table currently holds data up 
+to to 31 July 2022. The output should include 
+the historical data in this table.
+Assumption:
+● There may be a new user or song in the 
+songs_weekly table not present in the 
+songs_history table.*/
+select * from Q96_songs_history;
+select * from Q96_songs_weekly;
+
+create table if not exists Q96_songs_history
+(
+    history_id int,
+	user_id int,
+    song_id int,
+    song_plays int
+);
+
+create table if not exists Q96_songs_weekly
+(
+    user_id int,
+	song_id int,
+    listen_time datetime
+);
+
+insert into Q96_songs_history (history_id, user_id, song_id, song_plays)
+values
+(10011, 777, 1238, 11),
+(12452, 695, 4520, 1);
+
+insert into Q96_songs_weekly (user_id, song_id, listen_time)
+values
+(777, 1238, '2022-08-01 12:00:00'),
+(695, 4520, '2022-08-04 08:00:00'),
+(125, 9630, '2022-08-04 16:00:00'),
+(695, 9852, '2022-08-07 12:00:00');
+
+
+
+
+
+
+
+
+
+
 
 
 
