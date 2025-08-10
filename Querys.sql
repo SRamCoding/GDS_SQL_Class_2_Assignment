@@ -270,7 +270,8 @@ FROM
 lag(free) over (order by seat_id) as anterior,
 lead(free) over (order by seat_id) as siguiente
 from Q58_Cinema) T
-WHERE T.free = 1 AND (T.anterior = 1 OR T.siguiente = 1);
+WHERE T.free = 1 AND (T.anterior = 1 OR T.siguiente = 1)
+ORDER BY T.seat_id;
 
 create table if not exists Q58_Cinema
 (
@@ -1420,7 +1421,7 @@ from Q87_orders o
 join Q87_customers c on o.customer_id = c.customer_id
 where year(c.signup_timestamp) = 2022 and month(c.signup_timestamp) = 6) T)
 
-SELECT (y1.g*100/y2.g) AS bad_experience_pct
+SELECT round(y1.g*100/y2.g, 2) AS bad_experience_pct
 FROM y1,y2;
 
 create table if not exists Q87_orders
@@ -1850,8 +1851,41 @@ Assumption:
 ● There may be a new user or song in the 
 songs_weekly table not present in the 
 songs_history table.*/
-select * from Q96_songs_history;
-select * from Q96_songs_weekly;
+with t1 as 
+(select song_id, user_id, count(*) as song_plays
+from Q96_songs_weekly
+group by song_id, user_id
+
+union all 
+
+select song_id, user_id, song_plays
+from Q96_songs_history),
+
+t2 as 
+(select user_id, song_id, sum(song_plays) as song_plays
+from t1
+group by user_id, song_id),
+
+t3 as 
+(select t1.user_id, t1.song_id 
+from Q96_songs_history t1
+join Q96_songs_weekly t2
+on t1.song_id = t2.song_id
+and t1.user_id = t2.user_id
+
+union all
+select t2.user_id, t2.song_id
+from Q96_songs_history t1
+right join Q96_songs_weekly t2
+on t1.user_id = t2.user_id
+where t1.user_id is null)
+
+select t2.*
+from t2 
+join t3
+on t2.user_id = t3.user_id
+and t2.song_id = t3.song_id;
+
 
 create table if not exists Q96_songs_history
 (
@@ -1880,11 +1914,55 @@ values
 (125, 9630, '2022-08-04 16:00:00'),
 (695, 9852, '2022-08-07 12:00:00');
 
+-- Q97: 
+/*New TikTok users sign up with their emails, 
+so each signup requires a text confirmation 
+to activate the new user's account.
+Write a query to find the confirmation rate 
+of users who confirmed their signups with 
+text messages.
+Round the result to 2 decimal places.
+Hint- Use Joins
+Assumptions:
+● A user may fail to confirm several times 
+with text. Once the signup is confirmed for 
+a user, they will not be able to initiate 
+the signup again.
+● A user may not initiate the signup 
+confirmation process at all.*/
+select * from Q97_emails;
+select * from Q97_texts;
 
+select * 
+from Q97_emails t1
+join Q97_texts t2
+on t1.email_id = t2.email_id;
 
+create table if not exists Q97_emails
+(
+    email_id int,
+	user_id int,
+    signup_date datetime
+);
 
+create table if not exists Q97_texts
+(
+    text_id int,
+	email_id int,
+    signup_action enum('Confirmed', 'Not_Confirmed')
+);
 
+insert into Q97_emails (email_id, user_id, signup_date)
+values
+(125, 7771, '2022-06-14 00:00:00'),
+(236, 6950, '2022-07-01 00:00:00'),
+(433, 1052, '2022-07-09 00:00:00');
 
+insert into Q97_texts (text_id, email_id, signup_action)
+values
+(6878, 125, 'Confirmed'),
+(6920, 236, 'Not_Confirmed'),
+(6994, 236, 'Confirmed');
 
 
 
