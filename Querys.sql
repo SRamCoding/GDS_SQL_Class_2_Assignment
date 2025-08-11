@@ -1930,13 +1930,17 @@ a user, they will not be able to initiate
 the signup again.
 ● A user may not initiate the signup 
 confirmation process at all.*/
-select * from Q97_emails;
-select * from Q97_texts;
+with t1 as 
+(select count(distinct email_id) as n1
+from Q97_texts
+where signup_action = 'Confirmed'),
 
-select * 
-from Q97_emails t1
-join Q97_texts t2
-on t1.email_id = t2.email_id;
+t2 as
+(select count(distinct email_id) as n2
+from Q97_emails)
+
+SELECT round(t1.n1/t2.n2, 2) as confirm_rate
+FROM t1,t2;
 
 create table if not exists Q97_emails
 (
@@ -1964,12 +1968,110 @@ values
 (6920, 236, 'Not_Confirmed'),
 (6994, 236, 'Confirmed');
 
+-- Q98: 
+/*The table below contains information 
+about tweets over a given period of time. 
+Calculate the 3-day rolling average of 
+tweets published by each user for each 
+date that a tweet was posted. Output the
+user id, tweet date, and rolling averages 
+rounded to 2 decimal places.
+Hint- Use Count and group by
+Important Assumptions:
+● Rows in this table are consecutive and 
+ordered by date.
+● Each row represents a different day
+● A day that does not correspond to a row 
+in this table is not counted. The most 
+recent day is the next row above the 
+current row.
+Note: Rolling average is a metric that 
+helps us analyze data points by creating 
+a series of averages based on different 
+subsets of a dataset. It is also known as 
+a moving average, running average, moving 
+mean, or rolling mean.*/
+with t1 as 
+(select user_id, date(tweet_date) as tweet_date, count(*) as tweets_count
+from Q98_tweets
+group by user_id, date(tweet_date))
 
+select 	user_id, 
+		tweet_date,
+		round(avg(tweets_count) 
+				over (
+					partition by user_id 
+                    order by tweet_date 
+                    rows between 2 preceding and current row), 2) as rolling_avg_3days
+from t1;
 
+create table if not exists Q98_tweets
+(
+    tweet_id int,
+	user_id int,
+    tweet_date timestamp
+);
 
+insert into Q98_tweets (tweet_id, user_id, tweet_date)
+values
+(214252, 111, '2022-06-01 12:00:00'),
+(739252, 111, '2022-06-01 12:00:00'),
+(846402, 111, '2022-06-02 12:00:00'),
+(241425, 254, '2022-06-02 12:00:00'),
+(137374, 111, '2022-06-04 12:00:00');
 
+-- Q99: 
+/*Assume you are given the tables 
+below containing information on 
+Snapchat users, their ages, and
+their time spent sending and opening 
+snaps. Write a query to obtain a 
+breakdown of the time spent sending 
+vs. opening snaps (as a percentage 
+of total time spent on these 
+activities) for each age group.
+Hint- Use join and case
+Output the age bucket and percentage 
+of sending and opening snaps. Round 
+the percentage to 2 decimal places.
+Notes:
+● You should calculate these percentages:
+	○ time sending / (time sending + time opening)
+	○ time opening / (time sending + time opening)
+● To avoid integer division in percentages, 
+multiply by 100.0 and not 100.*/
 
+select * from Q99_activities;
+select * from Q99_age_breakdown;
 
+create table if not exists Q99_activities
+(
+    activity_id int,
+	user_id int,
+    activity_type enum('send', 'open', 'chat'),
+    time_spent float,
+    activity_date datetime
+);
+
+create table if not exists Q99_age_breakdown
+(
+    user_id int,
+    age_bucket enum('21-25', '26-30', '31-35')
+);
+
+insert into Q99_activities (activity_id, user_id, activity_type, time_spent, activity_date)
+values
+(7274, 123, 'open', 4.50, '2022-06-22 12:00:00'),
+(2425, 123, 'send', 3.50, '2022-06-22 12:00:00'),
+(1413, 456, 'send', 5.67, '2022-06-23 12:00:00'),
+(1414, 789, 'chat', 11.00, '2022-06-25 12:00:00'),
+(2536, 456, 'open', 3.00, '2022-06-25 12:00:00');
+
+insert into Q99_age_breakdown (user_id, age_bucket)
+values
+(123, '31-35'),
+(456, '26-30'),
+(789, '21-25');
 
 
 
