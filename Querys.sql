@@ -1110,7 +1110,7 @@ values
 (1623, 123424, 1246.44, '2021-12-31 12:00:00'),
 (1322, 123424, 2145.32, '2022-12-31 12:00:00');
 
--- Q81: **********************FALTA**********************************
+-- Q81:
 /*Amazon wants to maximise the number 
 of items it can stock in a 500,000 
 square feet warehouse. It wants to 
@@ -1128,7 +1128,36 @@ of the necessary fields such as item type
 ('prime_eligible','not_prime'), SUM of 
 square footage, and COUNT of items grouped 
 by the item type.*/
-select * from Q81_inventory;
+with t1 as
+(select item_type, round(avg(square_footage),2) as r
+from Q81_inventory
+group by item_type),
+
+prime_eligible as
+(select * 
+from t1
+where item_type = 'prime_eligible'),
+
+not_prime as
+(select * 
+from t1
+where item_type = 'not_prime'),
+
+cantidad_prime_eligible as
+(select item_type, r, floor((500000 / r)/5)*5 as q1, r*floor((500000 / r)/5)*5 as v1 
+from prime_eligible),
+
+cantidad_not_prime as
+(select not_prime.item_type, not_prime.r, floor(((500000 - cantidad_prime_eligible.v1) / not_prime.r)/6)*6 as q2
+from cantidad_prime_eligible, not_prime)
+
+select item_type, cantidad_prime_eligible.q1 as item_count
+from cantidad_prime_eligible
+
+union all
+
+select item_type, cantidad_not_prime.q2 as item_count
+from cantidad_not_prime;
 
 create table if not exists Q81_inventory
 (
@@ -1145,11 +1174,6 @@ values
 (2452, 'prime_eligible', 'television', 85.00),
 (3255, 'not_prime', 'side table', 22.60),
 (1672, 'prime_eligible', 'laptop', 8.50);
-
-
-select (500000 / min(square_footage)) as min 
-from Q81_inventory
-where item_type = 'prime_eligible';
 
 -- Q82:
 /*Assume you have the table below 
@@ -1190,7 +1214,7 @@ values
 (742, 1374, 'comment', '2022-06-05 12:00:00'),
 (648, 3124, 'like', '2022-06-18 12:00:00');
 
--- Q83:**********************FALTA**************************
+-- Q83:
 /*Google's marketing team is making 
 a Superbowl commercial and needs a 
 simple statistic to put on
@@ -1206,7 +1230,35 @@ bucket.
 Write a query to report the median of 
 searches made by a user. Round the 
 median to one decimal point.*/
-select * from Q83_search_frequency;
+with recursive expand_recursive as 
+(select searches, 1 as contador
+from Q83_search_frequency
+
+union all 
+
+select t1.searches, t1.contador + 1 
+from expand_recursive t1
+join Q83_search_frequency t2
+on t1.searches = t2.searches
+where t1.contador + 1 <= t2.num_users),
+
+expand_recursive_ordened as
+(select searches, row_number() over(order by searches) as p
+from expand_recursive
+order by searches asc),
+
+cantidad as
+(select count(*) as q from expand_recursive_ordened)
+
+select case 
+		when q%2 = 0 then ( select avg(searches) 
+							from expand_recursive_ordened 
+                            where p = q/2 or p = floor(q/2)+1 )
+        else (  select searches 
+				from expand_recursive_ordened 
+                where p = floor(q/2)+1  )
+	   end as median
+from cantidad;
 
 create table if not exists Q83_search_frequency
 (
@@ -1221,7 +1273,7 @@ values
 (3, 3),
 (4, 1);
 
--- Q84: *******************************FALTA******************************
+-- Q84:
 /*Write a query to update the Facebook 
 advertiser's status using the daily_pay 
 table. Advertiser is a two-column table 
@@ -1243,8 +1295,42 @@ but have yet to make any recent payment.
 recently but may have made a previous 
 payment and have made payment again 
 recently.*/
+-- Paso 0: Crear tabla alternativa copiando toda la original
+create table Q84_advertiser_copy as
 select * from Q84_advertiser;
-select * from Q84_daily_pay;
+set SQL_SAFE_UPDATES = 0; -- Desactivar el modo seguro
+
+-- Paso 1: Actualizar la tabla alternativa para aquellas compañias 
+-- que recién pagan ahora y nunca antes lo han hecho
+insert into Q84_advertiser_copy (user_id, status)
+select t2.user_id, 'NEW'
+from Q84_daily_pay t2
+left join Q84_advertiser_copy t1 on t1.user_id = t2.user_id
+where t1.user_id is null;
+
+-- Paso 2: Actualizar la tabla alternativa para aquellas compañias 
+-- que pagaron recientemente pero que antes estaban marcadas como abandonadas
+update Q84_advertiser_copy t1
+join Q84_daily_pay t2 on t1.user_id = t2.user_id
+set t1.status = 'RESURRECT'
+where t1.status = 'CHURN';
+
+-- Paso 3: Actualizar la tabla alternativa para aquellas compañias 
+-- que no pagaron recientemente pero antes ya habian pagado
+update Q84_advertiser_copy t1
+left join Q84_daily_pay t2 on t1.user_id = t2.user_id
+set t1.status = 'CHURN'
+where t2.user_id is null;
+
+-- Paso 4: Actualizar la tabla alternativa para aquellas compañias 
+-- que pagaron recientemente y también habían pagado antes.
+update Q84_advertiser_copy t1
+join Q84_daily_pay t2 on t1.user_id = t2.user_id
+set t1.status = 'EXISTING'
+where t1.user_id = t2.user_id;
+
+-- CONSULTAR LOS DATOS
+select * from Q84_advertiser_copy;
 
 create table if not exists Q84_advertiser
 (
@@ -2040,9 +2126,21 @@ Notes:
 	○ time opening / (time sending + time opening)
 ● To avoid integer division in percentages, 
 multiply by 100.0 and not 100.*/
+with y1 as 
+(select t2.age_bucket, 
+		sum(case when t1.activity_type = 'send' then time_spent end) as time_sending,
+        sum(case when t1.activity_type = 'open' then time_spent end) as time_opening,
+        sum(time_spent) as total_time
+from Q99_activities t1
+join Q99_age_breakdown t2
+on t1.user_id = t2.user_id
+and (t1.activity_type = 'send' or t1.activity_type = 'open')
+group by t2.age_bucket)
 
-select * from Q99_activities;
-select * from Q99_age_breakdown;
+select  age_bucket, 
+		round(time_sending*100/total_time, 2) as send_perc,
+        round(time_opening*100/total_time, 2) as open_perc
+from y1;
 
 create table if not exists Q99_activities
 (
@@ -2073,33 +2171,96 @@ values
 (456, '26-30'),
 (789, '21-25');
 
+-- Q100: 
+/*The LinkedIn Creator team is looking 
+for power creators who use their 
+personal profile as a company or 
+influencer page. This means that if 
+someone's Linkedin page has more 
+followers than all the companies they 
+work for, we can safely assume that 
+person is a Power Creator. Keep in 
+mind that if a person works at multiple 
+companies, we should take into account 
+the company with the most followers.
+Level - Medium
+Hint- Use join and group by
+Write a query to return the IDs of 
+these LinkedIn power creators in 
+ascending order.
+Assumptions:
+● A person can work at multiple 
+companies.
+● In the case of multiple companies, 
+use the one with largest follower 
+base.*/
+with t1 as 
+(select t1.personal_profile_id, 
+		t2.company_id, 
+        t2.followers as followers_per_company
+from Q100_employee_company t1
+join Q100_company_pages t2
+on t1.company_id = t2.company_id),
 
+t2 as 
+(select y1.profile_id, 
+		y1.followers as followers_per_person, 
+        t1.company_id, 
+        t1.followers_per_company
+from t1 
+join Q100_personal_profiles y1
+on t1.personal_profile_id = y1.profile_id)
 
+select distinct profile_id 
+from t2 
+where followers_per_person > followers_per_company
+order by profile_id;
 
+create table if not exists Q100_personal_profiles
+(
+    profile_id int,
+    name varchar(25),
+    followers int
+);
 
+create table if not exists Q100_employee_company
+(
+    personal_profile_id int,
+    company_id int
+);
 
+create table if not exists Q100_company_pages
+(
+    company_id int,
+    name varchar(30),
+    followers int
+);
 
+insert into Q100_personal_profiles (profile_id, name, followers) 
+values
+(1, 'Nick Singh', 92000),
+(2, 'Zach Wilson', 199000),
+(3, 'Daliana Liu', 171000),
+(4, 'Ravit Jain', 107000),
+(5, 'Vin Vashishta', 139000),
+(6, 'Susan Wojcicki', 39000);
 
+insert into Q100_employee_company (personal_profile_id, company_id) 
+values
+(1, 4),
+(1, 9),
+(2, 2),
+(3, 1),
+(4, 3),
+(5, 6),
+(6, 5);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+insert into Q100_company_pages (company_id, name, followers) 
+values
+(1, 'The Data Science Podcast', 8000),
+(2, 'Airbnb', 700000),
+(3, 'The Ravit Show', 6000),
+(4, 'DataLemur', 200),
+(5, 'YouTube', 16000000),
+(6, 'DataScience.Vin', 4500),
+(9, 'Ace The Data Science Interview', 4479);
