@@ -1296,7 +1296,7 @@ recently but may have made a previous
 payment and have made payment again 
 recently.*/
 -- Paso 0: Crear tabla alternativa copiando toda la original
-create table Q84_advertiser_copy as
+create table if not exists Q84_advertiser_copy as
 select * from Q84_advertiser;
 set SQL_SAFE_UPDATES = 0; -- Desactivar el modo seguro
 
